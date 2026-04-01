@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Faturas - Amazonas Energia</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Nunito Sans', 'Segoe UI', sans-serif; background: #f5f6fa; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ══════════════════════════════════════════════════════════════
+    // CONFIGURAÇÃO — substitua pela sua anon key do Supabase
+    // ══════════════════════════════════════════════════════════════
+    const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
+    // ══════════════════════════════════════════════════════════════
+
+    async function sb(ep, opts = {}) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json", Prefer: opts.prefer || "return=representation" },
+        ...opts,
+      });
+      return r.json();
+    }
+
+    const ST = {
+      pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
+      aguardando_login: { label: "Aguardando", color: "#7c3aed", bg: "#ede9fe" },
+      em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe" },
+      concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5" },
+      erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2" },
+      credenciais_invalidas: { label: "Cred. Inválidas", color: "#dc2626", bg: "#fee2e2" },
+    };
+
+    function App() {
+      const [tasks, setTasks] = useState([]);
+      const [sel, setSel] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      const load = async () => {
+        const d = await sb("extraction_requests?select=id,status,status_detail,pdf_links,credentials,created_at&order=created_at.desc&limit=50");
+        if (Array.isArray(d)) setTasks(d);
+        setLoading(false);
+      };
+
+      useEffect(() => { load(); const i = setInterval(load, 6000); return () => clearInterval(i); }, []);
+
+      const task = tasks.find(t => t.id === sel);
+      const concluidas = tasks.filter(t => t.status === "concluido").length;
+      const totalPdfs = tasks.reduce((a, t) => a + (t.pdf_links?.length || 0), 0);
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#f5f6fa" }}>
+          {/* Header */}
+          <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #153657 100%)", padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 36, height: 36, background: "#22c55e", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff" }}>⚡</div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#ffffff" }}>SaaS Faturas</div>
+                <div style={{ fontSize: 11, color: "#7db8e0" }}>Amazonas Energia</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ fontSize: 12, color: "#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs</div>
+              <button onClick={load} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>↻ Atualizar</button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", minHeight: "calc(100vh - 68px)" }}>
+            {/* Sidebar */}
+            <div style={{ width: 360, background: "#fff", borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
+              <div style={{ padding: "18px 20px 10px", fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Extrações ({tasks.length})
+              </div>
+
+              {loading && <p style={{ padding: 40, textAlign: "center", color: "#d1d5db" }}>Carregando...</p>}
+
+              {tasks.map(t => {
+                const s = ST[t.status] || ST.pendente;
+                const cpf = t.credentials?.cpf_cnpj || t.credentials?.id_cliente || "—";
+                const n = t.pdf_links?.length || 0;
+                const ucs = t.credentials?.ucs?.length || 0;
+                const dt = new Date(t.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+                const active = sel === t.id;
+                return (
+                  <div key={t.id} onClick={() => setSel(t.id)} style={{
+                    padding: "14px 20px", margin: "2px 8px", borderRadius: 10, cursor: "pointer",
+                    background: active ? "#f0f7ff" : "#fff", border: active ? "1.5px solid #3b82f6" : "1.5px solid transparent",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{cpf}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: s.color, background: s.bg, padding: "3px 10px", borderRadius: 20 }}>{s.label}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9ca3af", display: "flex", gap: 10 }}>
+                      <span>{dt}</span>
+                      {ucs > 0 && <span>{ucs} UC(s)</span>}
+                      {n > 0 && <span style={{ color: "#059669", fontWeight: 600 }}>✓ {n} PDFs</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!loading && tasks.length === 0 && (
+                <div style={{ padding: 48, textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>📋</div>
+                  <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Nenhuma extração ainda</p>
+                  <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>Faça login no portal com a extensão</p>
+                </div>
+              )}
+            </div>
+
+            {/* Main */}
+            <div style={{ flex: 1, overflowY: "auto", padding: task ? 28 : 0 }}>
+              {!task ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column" }}>
+                  <div style={{ width: 80, height: 80, background: "#e5e7eb", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 16 }}>📄</div>
+                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração para ver as faturas</p>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 24, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600, marginBottom: 4 }}>CLIENTE</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{task.credentials?.cpf_cnpj || task.credentials?.id_cliente || "—"}</div>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: (ST[task.status] || ST.pendente).color, background: (ST[task.status] || ST.pendente).bg, padding: "6px 16px", borderRadius: 20 }}>
+                        {(ST[task.status] || ST.pendente).label}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 20, marginTop: 14, fontSize: 13, color: "#6b7280" }}>
+                      {task.credentials?.ucs && <span><strong>UCs:</strong> {task.credentials.ucs.join(", ")}</span>}
+                      <span><strong>Data:</strong> {new Date(task.created_at).toLocaleString("pt-BR")}</span>
+                      {task.pdf_links && <span><strong>Faturas:</strong> {task.pdf_links.length}</span>}
+                    </div>
+                  </div>
+
+                  {task.pdf_links && task.pdf_links.length > 0 ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
+                      {task.pdf_links.map((f, i) => (
+                        <div key={i} style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{f.mes_referencia}</span>
+                              {f.situacao === "ABER" && <span style={{ fontSize: 10, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: 20, fontWeight: 700 }}>EM ABERTO</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>
+                              UC {f.uc} • {f.size_kb} KB
+                              {f.valor > 0 && <span style={{ color: "#059669", fontWeight: 600, marginLeft: 6 }}>R$ {Number(f.valor).toFixed(2)}</span>}
+                            </div>
+                          </div>
+                          <a href={f.storage_url} target="_blank" rel="noopener noreferrer"
+                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                            ↓ Baixar
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (task.status === "pendente" || task.status === "em_progresso") ? (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
+                      <div style={{ width: 36, height: 36, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
+                      <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Baixando faturas...</p>
+                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Isso leva cerca de 2 minutos</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
