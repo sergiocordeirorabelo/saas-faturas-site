@@ -20,12 +20,8 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // ══════════════════════════════════════════════════════════════
-    // CONFIGURAÇÃO — substitua pela sua anon key do Supabase
-    // ══════════════════════════════════════════════════════════════
     const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
-    // ══════════════════════════════════════════════════════════════
 
     async function sb(ep, opts = {}) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
@@ -43,6 +39,18 @@
       erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2" },
       credenciais_invalidas: { label: "Cred. Inválidas", color: "#dc2626", bg: "#fee2e2" },
     };
+
+    function baixarTudo(pdfs) {
+      pdfs.forEach((f, i) => {
+        setTimeout(() => {
+          const a = document.createElement("a");
+          a.href = f.storage_url;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.click();
+        }, i * 500);
+      });
+    }
 
     function App() {
       const [tasks, setTasks] = useState([]);
@@ -130,6 +138,7 @@
                 </div>
               ) : (
                 <div>
+                  {/* Info card */}
                   <div style={{ background: "#fff", borderRadius: 14, padding: 24, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
@@ -140,13 +149,23 @@
                         {(ST[task.status] || ST.pendente).label}
                       </span>
                     </div>
-                    <div style={{ display: "flex", gap: 20, marginTop: 14, fontSize: 13, color: "#6b7280" }}>
+                    <div style={{ display: "flex", gap: 20, marginTop: 14, fontSize: 13, color: "#6b7280", alignItems: "center", flexWrap: "wrap" }}>
                       {task.credentials?.ucs && <span><strong>UCs:</strong> {task.credentials.ucs.join(", ")}</span>}
                       <span><strong>Data:</strong> {new Date(task.created_at).toLocaleString("pt-BR")}</span>
                       {task.pdf_links && <span><strong>Faturas:</strong> {task.pdf_links.length}</span>}
+                      {task.pdf_links && task.pdf_links.length > 0 && (
+                        <button onClick={() => baixarTudo(task.pdf_links)} style={{
+                          background: "#059669", color: "#fff", padding: "8px 20px", borderRadius: 8,
+                          fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
+                          marginLeft: "auto", display: "flex", alignItems: "center", gap: 6
+                        }}>
+                          ↓ Baixar Tudo ({task.pdf_links.length})
+                        </button>
+                      )}
                     </div>
                   </div>
 
+                  {/* Grid de faturas */}
                   {task.pdf_links && task.pdf_links.length > 0 ? (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
                       {task.pdf_links.map((f, i) => (
