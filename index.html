@@ -13,8 +13,12 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Nunito Sans', 'Segoe UI', sans-serif; background: #f5f6fa; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    input:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    input:focus, select:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
     button:hover { opacity: 0.9; }
+    .toggle { position: relative; width: 44px; height: 24px; background: #d1d5db; border-radius: 12px; cursor: pointer; transition: background .2s; }
+    .toggle.on { background: #22c55e; }
+    .toggle-dot { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: left .2s; }
+    .toggle.on .toggle-dot { left: 22px; }
   </style>
 </head>
 <body>
@@ -24,7 +28,7 @@
 
     const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
-    const ACCESS_CODE = "faturas2026"; // Código de acesso — troque como quiser
+    const ACCESS_CODE = "faturas2026";
 
     async function sb(ep, opts = {}) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
@@ -35,14 +39,13 @@
     }
 
     const ST = {
-      pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
-      em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe" },
-      concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5" },
-      erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2" },
-      credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2" },
+      pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7", icon: "⏳" },
+      em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe", icon: "⬇️" },
+      concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5", icon: "✅" },
+      erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2", icon: "❌" },
+      credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2", icon: "🔒" },
     };
 
-    // Download real sem abrir abas
     async function baixarPDF(url, filename) {
       try {
         const resp = await fetch(url);
@@ -54,9 +57,7 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
-      } catch(e) {
-        window.open(url, "_blank");
-      }
+      } catch(e) { window.open(url, "_blank"); }
     }
 
     async function baixarTudo(pdfs, setBaixando) {
@@ -71,53 +72,33 @@
     function formatCpf(v) {
       const n = v.replace(/\D/g, "").slice(0, 14);
       if (n.length <= 3) return n;
-      if (n.length <= 6) return n.slice(0,3) + "." + n.slice(3);
-      if (n.length <= 9) return n.slice(0,3) + "." + n.slice(3,6) + "." + n.slice(6);
-      if (n.length <= 11) return n.slice(0,3) + "." + n.slice(3,6) + "." + n.slice(6,9) + "-" + n.slice(9);
-      return n.slice(0,2) + "." + n.slice(2,5) + "." + n.slice(5,8) + "/" + n.slice(8,12) + "-" + n.slice(12);
+      if (n.length <= 6) return n.slice(0,3)+"."+n.slice(3);
+      if (n.length <= 9) return n.slice(0,3)+"."+n.slice(3,6)+"."+n.slice(6);
+      if (n.length <= 11) return n.slice(0,3)+"."+n.slice(3,6)+"."+n.slice(6,9)+"-"+n.slice(9);
+      return n.slice(0,2)+"."+n.slice(2,5)+"."+n.slice(5,8)+"/"+n.slice(8,12)+"-"+n.slice(12);
     }
 
-    // ══════════════════════════════════════════════
-    // Tela de Código de Acesso
-    // ══════════════════════════════════════════════
+    // ══════ Login Gate ══════
     function LoginGate({ onAuth }) {
       const [code, setCode] = useState("");
       const [error, setError] = useState("");
-
-      const handleLogin = () => {
-        if (code === ACCESS_CODE) {
-          sessionStorage.setItem("saas_auth", "ok");
-          onAuth();
-        } else {
-          setError("Código inválido.");
-        }
-      };
-
+      const check = () => { if (code === ACCESS_CODE) { sessionStorage.setItem("saas_auth","ok"); onAuth(); } else setError("Código inválido."); };
       return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0d2137 0%, #153657 100%)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: "48px 40px", maxWidth: 400, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", textAlign: "center" }}>
-            <div style={{ width: 56, height: 56, background: "#22c55e", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", margin: "0 auto 16px" }}>⚡</div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>SaaS Faturas</h1>
-            <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 28 }}>Digite o código de acesso</p>
-            <input
-              type="password" value={code} onChange={e => { setCode(e.target.value); setError(""); }}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-              placeholder="Código de acesso"
-              style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1.5px solid #d1d5db", fontSize: 16, textAlign: "center", marginBottom: 16 }}
-            />
-            {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-            <button onClick={handleLogin}
-              style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#0d2137", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-              Entrar
-            </button>
+        <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0d2137,#153657)" }}>
+          <div style={{ background:"#fff", borderRadius:20, padding:"48px 40px", maxWidth:400, width:"100%", boxShadow:"0 8px 32px rgba(0,0,0,.2)", textAlign:"center" }}>
+            <div style={{ width:56, height:56, background:"#22c55e", borderRadius:14, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, color:"#fff", margin:"0 auto 16px" }}>⚡</div>
+            <h1 style={{ fontSize:24, fontWeight:800, color:"#0f172a", marginBottom:4 }}>SaaS Faturas</h1>
+            <p style={{ fontSize:14, color:"#9ca3af", marginBottom:28 }}>Digite o código de acesso</p>
+            <input type="password" value={code} onChange={e=>{setCode(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&check()} placeholder="Código de acesso"
+              style={{ width:"100%", padding:"14px 16px", borderRadius:12, border:"1.5px solid #d1d5db", fontSize:16, textAlign:"center", marginBottom:16 }} />
+            {error && <p style={{ color:"#dc2626", fontSize:13, marginBottom:12 }}>{error}</p>}
+            <button onClick={check} style={{ width:"100%", padding:14, borderRadius:12, border:"none", background:"#0d2137", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer" }}>Entrar</button>
           </div>
         </div>
       );
     }
 
-    // ══════════════════════════════════════════════
-    // App Principal
-    // ══════════════════════════════════════════════
+    // ══════ Dashboard ══════
     function Dashboard() {
       const [view, setView] = useState("list");
       const [tasks, setTasks] = useState([]);
@@ -125,9 +106,13 @@
       const [loading, setLoading] = useState(true);
       const [cpf, setCpf] = useState("");
       const [senha, setSenha] = useState("");
+      const [meses, setMeses] = useState("12");
+      const [ucsInput, setUcsInput] = useState("");
+      const [monitorar, setMonitorar] = useState(false);
       const [submitting, setSubmitting] = useState(false);
       const [error, setError] = useState("");
       const [baixando, setBaixando] = useState(false);
+      const [filtroUC, setFiltroUC] = useState("todas");
 
       const load = async () => {
         const d = await sb("extraction_requests?select=id,status,status_detail,pdf_links,credentials,created_at&order=created_at.desc&limit=50");
@@ -140,180 +125,255 @@
       const task = tasks.find(t => t.id === sel);
       const concluidas = tasks.filter(t => t.status === "concluido").length;
       const totalPdfs = tasks.reduce((a, t) => a + (t.pdf_links?.length || 0), 0);
+      const monitorados = tasks.filter(t => t.credentials?.monitorar).length;
+
+      // UCs disponíveis na tarefa selecionada
+      const ucsDisponiveis = task?.pdf_links ? [...new Set(task.pdf_links.map(f => f.uc))] : [];
+      const faturasFiltradas = task?.pdf_links ? (filtroUC === "todas" ? task.pdf_links : task.pdf_links.filter(f => String(f.uc) === filtroUC)) : [];
 
       const handleSubmit = async () => {
         const cpfLimpo = cpf.replace(/\D/g, "");
         if (!cpfLimpo || !senha) { setError("Preencha CPF e senha."); return; }
         setSubmitting(true); setError("");
         try {
+          const creds = { cpf_cnpj: cpfLimpo, senha: senha, meses: parseInt(meses), monitorar: monitorar };
+          if (ucsInput.trim()) {
+            creds.selected_ucs = ucsInput.split(",").map(u => u.trim()).filter(u => u);
+          }
           const res = await sb("extraction_requests", {
             method: "POST",
-            body: JSON.stringify({
-              concessionaria: "amazonas_energia",
-              credentials: { cpf_cnpj: cpfLimpo, senha: senha },
-              status: "pendente",
-            }),
+            body: JSON.stringify({ concessionaria: "amazonas_energia", credentials: creds, status: "pendente" }),
           });
           if (res && res[0]) {
-            setSel(res[0].id); setCpf(""); setSenha(""); setView("list"); load();
+            setSel(res[0].id); setCpf(""); setSenha(""); setUcsInput(""); setMonitorar(false); setMeses("12"); setView("list"); load();
           } else { setError("Erro ao criar tarefa."); }
         } catch(e) { setError("Erro de conexão."); }
         setSubmitting(false);
       };
 
+      const limpar = () => { setSel(null); setFiltroUC("todas"); };
       const logout = () => { sessionStorage.removeItem("saas_auth"); window.location.reload(); };
 
       return (
-        <div style={{ minHeight: "100vh", background: "#f5f6fa" }}>
+        <div style={{ minHeight:"100vh", background:"#f5f6fa" }}>
           {/* Header */}
-          <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #153657 100%)", padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, background: "#22c55e", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#fff" }}>⚡</div>
+          <div style={{ background:"linear-gradient(135deg,#0d2137,#153657)", padding:"16px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:36, height:36, background:"#22c55e", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:"#fff" }}>⚡</div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>SaaS Faturas</div>
-                <div style={{ fontSize: 11, color: "#7db8e0" }}>Amazonas Energia</div>
+                <div style={{ fontSize:18, fontWeight:800, color:"#fff" }}>SaaS Faturas</div>
+                <div style={{ fontSize:11, color:"#7db8e0" }}>Amazonas Energia</div>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 12, color: "#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs</span>
-              <button onClick={() => setView("form")} style={{ background: "#22c55e", border: "none", color: "#fff", padding: "9px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Novo Cliente</button>
-              <button onClick={load} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻</button>
-              <button onClick={logout} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#94a3b8", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>Sair</button>
+            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              <span style={{ fontSize:12, color:"#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs {monitorados > 0 && `• ${monitorados} monitorado(s)`}</span>
+              <button onClick={()=>setView("form")} style={{ background:"#22c55e", border:"none", color:"#fff", padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>+ Novo Cliente</button>
+              <button onClick={load} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.2)", color:"#fff", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>↻</button>
+              <button onClick={logout} style={{ background:"rgba(255,255,255,.08)", border:"1px solid rgba(255,255,255,.15)", color:"#94a3b8", padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Sair</button>
             </div>
           </div>
 
-          <div style={{ display: "flex", minHeight: "calc(100vh - 68px)" }}>
+          <div style={{ display:"flex", minHeight:"calc(100vh - 68px)" }}>
             {/* Sidebar */}
-            <div style={{ width: 360, background: "#fff", borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
-              <div style={{ padding: "18px 20px 10px", fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ width:360, background:"#fff", borderRight:"1px solid #e5e7eb", overflowY:"auto" }}>
+              <div style={{ padding:"18px 20px 10px", fontSize:12, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:".5px" }}>
                 Extrações ({tasks.length})
               </div>
-              {loading && <p style={{ padding: 40, textAlign: "center", color: "#d1d5db" }}>Carregando...</p>}
+              {loading && <p style={{ padding:40, textAlign:"center", color:"#d1d5db" }}>Carregando...</p>}
               {tasks.map(t => {
                 const s = ST[t.status] || ST.pendente;
                 const cpfD = t.credentials?.cpf_cnpj || t.credentials?.id_cliente || "—";
                 const n = t.pdf_links?.length || 0;
                 const ucs = t.credentials?.ucs?.length || 0;
-                const dt = new Date(t.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+                const mon = t.credentials?.monitorar;
+                const dt = new Date(t.created_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
                 const active = sel === t.id;
                 return (
-                  <div key={t.id} onClick={() => { setSel(t.id); setView("list"); }} style={{
-                    padding: "14px 20px", margin: "2px 8px", borderRadius: 10, cursor: "pointer",
-                    background: active ? "#f0f7ff" : "#fff", border: active ? "1.5px solid #3b82f6" : "1.5px solid transparent",
+                  <div key={t.id} onClick={()=>{setSel(t.id);setView("list");setFiltroUC("todas");}} style={{
+                    padding:"14px 20px", margin:"2px 8px", borderRadius:10, cursor:"pointer",
+                    background: active?"#f0f7ff":"#fff", border: active?"1.5px solid #3b82f6":"1.5px solid transparent",
                   }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{cpfD}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: s.color, background: s.bg, padding: "3px 10px", borderRadius: 20 }}>{s.label}</span>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                      <span style={{ fontSize:14, fontWeight:700, color:"#1e293b" }}>
+                        {cpfD} {mon && <span title="Monitorando" style={{ fontSize:12 }}>🔔</span>}
+                      </span>
+                      <span style={{ fontSize:11, fontWeight:700, color:s.color, background:s.bg, padding:"3px 10px", borderRadius:20 }}>{s.label}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#9ca3af", display: "flex", gap: 10 }}>
+                    <div style={{ fontSize:12, color:"#9ca3af", display:"flex", gap:10 }}>
                       <span>{dt}</span>
                       {ucs > 0 && <span>{ucs} UC(s)</span>}
-                      {n > 0 && <span style={{ color: "#059669", fontWeight: 600 }}>✓ {n} PDFs</span>}
+                      {n > 0 && <span style={{ color:"#059669", fontWeight:600 }}>✓ {n} PDFs</span>}
                     </div>
                   </div>
                 );
               })}
               {!loading && tasks.length === 0 && (
-                <div style={{ padding: 48, textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 8 }}>📋</div>
-                  <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Nenhuma extração</p>
-                  <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Cliente"</p>
+                <div style={{ padding:48, textAlign:"center" }}>
+                  <div style={{ fontSize:40, marginBottom:8 }}>📋</div>
+                  <p style={{ color:"#6b7280", fontSize:14, fontWeight:600 }}>Nenhuma extração</p>
+                  <p style={{ color:"#9ca3af", fontSize:13, marginTop:6 }}>Clique em "+ Novo Cliente"</p>
                 </div>
               )}
             </div>
 
             {/* Main */}
-            <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+            <div style={{ flex:1, overflowY:"auto", padding:28 }}>
+
+              {/* ══════ Formulário ══════ */}
               {view === "form" && (
-                <div style={{ maxWidth: 440, margin: "40px auto" }}>
-                  <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
-                    <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>Novo Cliente</h2>
-                    <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Credenciais do portal Amazonas Energia</p>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6, display: "block" }}>CPF ou CNPJ</label>
-                      <input type="text" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00"
-                        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #d1d5db", fontSize: 16, background: "#f9fafb" }} />
+                <div style={{ maxWidth:480, margin:"30px auto" }}>
+                  <div style={{ background:"#fff", borderRadius:16, padding:32, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #e5e7eb" }}>
+                    <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Novo Cliente</h2>
+                    <p style={{ fontSize:13, color:"#9ca3af", marginBottom:24 }}>Credenciais do portal Amazonas Energia</p>
+
+                    {/* CPF */}
+                    <div style={{ marginBottom:16 }}>
+                      <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>CPF ou CNPJ *</label>
+                      <input type="text" value={cpf} onChange={e=>setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00"
+                        style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:16, background:"#f9fafb" }} />
                     </div>
-                    <div style={{ marginBottom: 24 }}>
-                      <label style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6, display: "block" }}>Senha</label>
-                      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha do portal"
-                        onKeyDown={e => e.key === "Enter" && handleSubmit()}
-                        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #d1d5db", fontSize: 16, background: "#f9fafb" }} />
+
+                    {/* Senha */}
+                    <div style={{ marginBottom:16 }}>
+                      <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>Senha *</label>
+                      <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="Senha do portal"
+                        onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+                        style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:16, background:"#f9fafb" }} />
                     </div>
-                    {error && <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#dc2626", fontSize: 13 }}>{error}</div>}
+
+                    {/* Meses */}
+                    <div style={{ marginBottom:16 }}>
+                      <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>Período de faturas</label>
+                      <select value={meses} onChange={e=>setMeses(e.target.value)}
+                        style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:15, background:"#f9fafb", cursor:"pointer", color:"#1e293b" }}>
+                        <option value="12">Últimos 12 meses</option>
+                        <option value="24">Últimos 24 meses (2 anos)</option>
+                        <option value="36">Últimos 36 meses (3 anos)</option>
+                        <option value="48">Últimos 48 meses (4 anos)</option>
+                        <option value="60">Últimos 60 meses (5 anos)</option>
+                      </select>
+                    </div>
+
+                    {/* UCs específicas */}
+                    <div style={{ marginBottom:16 }}>
+                      <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>
+                        UCs específicas <span style={{ fontWeight:400, color:"#9ca3af" }}>(opcional — vazio = todas)</span>
+                      </label>
+                      <input type="text" value={ucsInput} onChange={e=>setUcsInput(e.target.value)} placeholder="Ex: 21300, 6021263"
+                        style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:15, background:"#f9fafb" }} />
+                      <p style={{ fontSize:11, color:"#9ca3af", marginTop:4 }}>Separe por vírgula. Deixe vazio para baixar de todas as UCs.</p>
+                    </div>
+
+                    {/* Monitorar */}
+                    <div style={{ marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:"#f0fdf4", borderRadius:10, border:"1px solid #bbf7d0" }}>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#166534" }}>🔔 Monitorar faturas novas</div>
+                        <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>Busca automaticamente quando surgir fatura nova</div>
+                      </div>
+                      <div className={`toggle ${monitorar?"on":""}`} onClick={()=>setMonitorar(!monitorar)}>
+                        <div className="toggle-dot"></div>
+                      </div>
+                    </div>
+
+                    {error && <div style={{ background:"#fee2e2", border:"1px solid #fecaca", borderRadius:10, padding:"10px 14px", marginBottom:16, color:"#dc2626", fontSize:13 }}>{error}</div>}
+
                     <button onClick={handleSubmit} disabled={submitting}
-                      style={{ width: "100%", padding: 14, borderRadius: 10, border: "none", background: "#0d2137", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
+                      style={{ width:"100%", padding:14, borderRadius:10, border:"none", background:"#0d2137", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", opacity:submitting?.6:1 }}>
                       {submitting ? "Enviando..." : "⚡ Buscar Faturas"}
                     </button>
-                    <button onClick={() => setView("list")} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid #d1d5db", background: "transparent", color: "#6b7280", fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+                    <button onClick={()=>setView("list")}
+                      style={{ width:"100%", padding:12, borderRadius:10, border:"1px solid #d1d5db", background:"transparent", color:"#6b7280", fontSize:13, cursor:"pointer", marginTop:8 }}>
                       Cancelar
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* ══════ Vazio ══════ */}
               {view === "list" && !task && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 124px)", flexDirection: "column" }}>
-                  <div style={{ width: 80, height: 80, background: "#e5e7eb", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 16 }}>📄</div>
-                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração ou adicione um cliente</p>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 124px)", flexDirection:"column" }}>
+                  <div style={{ width:80, height:80, background:"#e5e7eb", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, marginBottom:16 }}>📄</div>
+                  <p style={{ color:"#9ca3af", fontSize:15 }}>Selecione uma extração ou adicione um cliente</p>
                 </div>
               )}
 
+              {/* ══════ Detalhe ══════ */}
               {view === "list" && task && (
                 <div>
-                  <div style={{ background: "#fff", borderRadius: 14, padding: 24, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  {/* Info card */}
+                  <div style={{ background:"#fff", borderRadius:14, padding:24, marginBottom:20, boxShadow:"0 1px 3px rgba(0,0,0,.06)", border:"1px solid #e5e7eb" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                       <div>
-                        <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600, marginBottom: 4 }}>CLIENTE</div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{task.credentials?.cpf_cnpj || task.credentials?.id_cliente || "—"}</div>
+                        <div style={{ fontSize:12, color:"#9ca3af", fontWeight:600, marginBottom:4 }}>CLIENTE</div>
+                        <div style={{ fontSize:22, fontWeight:800, color:"#0f172a" }}>
+                          {task.credentials?.cpf_cnpj || task.credentials?.id_cliente || "—"}
+                          {task.credentials?.monitorar && <span style={{ marginLeft:8, fontSize:14 }} title="Monitorando">🔔</span>}
+                        </div>
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: (ST[task.status] || ST.pendente).color, background: (ST[task.status] || ST.pendente).bg, padding: "6px 16px", borderRadius: 20 }}>
-                        {(ST[task.status] || ST.pendente).label}
-                      </span>
+                      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:(ST[task.status]||ST.pendente).color, background:(ST[task.status]||ST.pendente).bg, padding:"6px 16px", borderRadius:20 }}>
+                          {(ST[task.status]||ST.pendente).label}
+                        </span>
+                        <button onClick={limpar} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+                          ✕ Limpar
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 20, marginTop: 14, fontSize: 13, color: "#6b7280", alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ display:"flex", gap:16, marginTop:14, fontSize:13, color:"#6b7280", alignItems:"center", flexWrap:"wrap" }}>
                       {task.credentials?.ucs && <span><strong>UCs:</strong> {task.credentials.ucs.join(", ")}</span>}
                       <span><strong>Data:</strong> {new Date(task.created_at).toLocaleString("pt-BR")}</span>
                       {task.pdf_links && <span><strong>Faturas:</strong> {task.pdf_links.length}</span>}
-                      {task.pdf_links && task.pdf_links.length > 0 && (
-                        <button onClick={() => baixarTudo(task.pdf_links, setBaixando)} disabled={baixando}
-                          style={{ background: "#059669", color: "#fff", padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", marginLeft: "auto", opacity: baixando ? 0.6 : 1 }}>
-                          {baixando ? "Baixando..." : `↓ Baixar Tudo (${task.pdf_links.length})`}
-                        </button>
-                      )}
+                      {task.credentials?.meses && <span><strong>Período:</strong> {task.credentials.meses} meses</span>}
                     </div>
+
+                    {/* Filtro por UC + Baixar Tudo */}
+                    {task.pdf_links && task.pdf_links.length > 0 && (
+                      <div style={{ display:"flex", gap:10, marginTop:16, alignItems:"center", flexWrap:"wrap" }}>
+                        <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>Filtrar UC:</label>
+                        <select value={filtroUC} onChange={e=>setFiltroUC(e.target.value)}
+                          style={{ padding:"6px 12px", borderRadius:8, border:"1.5px solid #d1d5db", fontSize:13, background:"#f9fafb", cursor:"pointer" }}>
+                          <option value="todas">Todas as UCs</option>
+                          {ucsDisponiveis.map(uc => <option key={uc} value={String(uc)}>UC {uc}</option>)}
+                        </select>
+                        <button onClick={()=>baixarTudo(faturasFiltradas,setBaixando)} disabled={baixando}
+                          style={{ background:"#059669", color:"#fff", padding:"8px 20px", borderRadius:8, fontSize:13, fontWeight:700, border:"none", cursor:"pointer", marginLeft:"auto", opacity:baixando?.6:1 }}>
+                          {baixando ? "Baixando..." : `↓ Baixar ${filtroUC==="todas"?"Tudo":"UC "+filtroUC} (${faturasFiltradas.length})`}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Grid faturas */}
                   {task.pdf_links && task.pdf_links.length > 0 ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
-                      {task.pdf_links.map((f, i) => (
-                        <div key={i} style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10 }}>
+                      {faturasFiltradas.map((f, i) => (
+                        <div key={i} style={{ background:"#fff", borderRadius:12, padding:"16px 18px", border:"1px solid #e5e7eb", display:"flex", justifyContent:"space-between", alignItems:"center", boxShadow:"0 1px 2px rgba(0,0,0,.04)" }}>
                           <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{f.mes_referencia}</span>
-                              {f.situacao === "ABER" && <span style={{ fontSize: 10, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: 20, fontWeight: 700 }}>EM ABERTO</span>}
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              <span style={{ fontSize:16, fontWeight:700, color:"#0f172a" }}>{f.mes_referencia}</span>
+                              {f.situacao === "ABER" && <span style={{ fontSize:10, color:"#d97706", background:"#fef3c7", padding:"2px 8px", borderRadius:20, fontWeight:700 }}>EM ABERTO</span>}
                             </div>
-                            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>
+                            <div style={{ fontSize:12, color:"#9ca3af", marginTop:3 }}>
                               UC {f.uc} • {f.size_kb} KB
-                              {f.valor > 0 && <span style={{ color: "#059669", fontWeight: 600, marginLeft: 6 }}>R$ {Number(f.valor).toFixed(2)}</span>}
+                              {f.valor > 0 && <span style={{ color:"#059669", fontWeight:600, marginLeft:6 }}>R$ {Number(f.valor).toFixed(2)}</span>}
                             </div>
                           </div>
-                          <button onClick={() => baixarPDF(f.storage_url, f.filename)}
-                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer" }}>↓ Baixar</button>
+                          <button onClick={()=>baixarPDF(f.storage_url,f.filename)}
+                            style={{ background:"#0d2137", color:"#fff", padding:"10px 16px", borderRadius:8, fontSize:13, fontWeight:700, border:"none", cursor:"pointer" }}>↓ Baixar</button>
                         </div>
                       ))}
                     </div>
-                  ) : (task.status === "pendente" || task.status === "em_progresso") ? (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
-                      <div style={{ width: 36, height: 36, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
-                      <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Baixando faturas...</p>
-                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>De 1 a 5 minutos dependendo das UCs</p>
+                  ) : (task.status==="pendente"||task.status==="em_progresso") ? (
+                    <div style={{ background:"#fff", borderRadius:14, padding:48, textAlign:"center", border:"1px solid #e5e7eb" }}>
+                      <div style={{ width:36, height:36, border:"4px solid #e5e7eb", borderTop:"4px solid #3b82f6", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
+                      <p style={{ color:"#6b7280", fontSize:14, fontWeight:600 }}>Baixando faturas...</p>
+                      <p style={{ color:"#9ca3af", fontSize:13, marginTop:4 }}>De 1 a 5 minutos dependendo das UCs e do período</p>
                     </div>
-                  ) : task.status === "credenciais_invalidas" ? (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-                      <p style={{ color: "#dc2626", fontSize: 15, fontWeight: 700 }}>CPF ou senha inválidos</p>
-                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Verifique os dados e tente novamente</p>
+                  ) : task.status==="credenciais_invalidas" ? (
+                    <div style={{ background:"#fff", borderRadius:14, padding:48, textAlign:"center", border:"1px solid #e5e7eb" }}>
+                      <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+                      <p style={{ color:"#dc2626", fontSize:15, fontWeight:700 }}>CPF ou senha inválidos</p>
+                      <p style={{ color:"#9ca3af", fontSize:13, marginTop:4 }}>Verifique os dados e tente novamente</p>
                     </div>
                   ) : null}
                 </div>
@@ -324,12 +384,9 @@
       );
     }
 
-    // ══════════════════════════════════════════════
-    // Root — decide se mostra login ou dashboard
-    // ══════════════════════════════════════════════
     function App() {
-      const [authed, setAuthed] = useState(sessionStorage.getItem("saas_auth") === "ok");
-      if (!authed) return <LoginGate onAuth={() => setAuthed(true)} />;
+      const [authed, setAuthed] = useState(sessionStorage.getItem("saas_auth")==="ok");
+      if (!authed) return <LoginGate onAuth={()=>setAuthed(true)} />;
       return <Dashboard />;
     }
 
