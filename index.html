@@ -24,6 +24,7 @@
 
     const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
+    const ACCESS_CODE = "faturas2026"; // Código de acesso — troque como quiser
 
     async function sb(ep, opts = {}) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
@@ -41,10 +42,30 @@
       credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2" },
     };
 
-    function baixarTudo(pdfs) {
-      pdfs.forEach((f, i) => {
-        setTimeout(() => { const a = document.createElement("a"); a.href = f.storage_url; a.target = "_blank"; a.click(); }, i * 500);
-      });
+    // Download real sem abrir abas
+    async function baixarPDF(url, filename) {
+      try {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || "fatura.pdf";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      } catch(e) {
+        window.open(url, "_blank");
+      }
+    }
+
+    async function baixarTudo(pdfs, setBaixando) {
+      setBaixando(true);
+      for (let i = 0; i < pdfs.length; i++) {
+        await baixarPDF(pdfs[i].storage_url, pdfs[i].filename || `fatura_${i+1}.pdf`);
+        await new Promise(r => setTimeout(r, 800));
+      }
+      setBaixando(false);
     }
 
     function formatCpf(v) {
@@ -56,8 +77,49 @@
       return n.slice(0,2) + "." + n.slice(2,5) + "." + n.slice(5,8) + "/" + n.slice(8,12) + "-" + n.slice(12);
     }
 
-    function App() {
-      const [view, setView] = useState("list"); // "list" | "form"
+    // ══════════════════════════════════════════════
+    // Tela de Código de Acesso
+    // ══════════════════════════════════════════════
+    function LoginGate({ onAuth }) {
+      const [code, setCode] = useState("");
+      const [error, setError] = useState("");
+
+      const handleLogin = () => {
+        if (code === ACCESS_CODE) {
+          sessionStorage.setItem("saas_auth", "ok");
+          onAuth();
+        } else {
+          setError("Código inválido.");
+        }
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0d2137 0%, #153657 100%)" }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: "48px 40px", maxWidth: 400, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, background: "#22c55e", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", margin: "0 auto 16px" }}>⚡</div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>SaaS Faturas</h1>
+            <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 28 }}>Digite o código de acesso</p>
+            <input
+              type="password" value={code} onChange={e => { setCode(e.target.value); setError(""); }}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              placeholder="Código de acesso"
+              style={{ width: "100%", padding: "14px 16px", borderRadius: 12, border: "1.5px solid #d1d5db", fontSize: 16, textAlign: "center", marginBottom: 16 }}
+            />
+            {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+            <button onClick={handleLogin}
+              style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#0d2137", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Entrar
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ══════════════════════════════════════════════
+    // App Principal
+    // ══════════════════════════════════════════════
+    function Dashboard() {
+      const [view, setView] = useState("list");
       const [tasks, setTasks] = useState([]);
       const [sel, setSel] = useState(null);
       const [loading, setLoading] = useState(true);
@@ -65,6 +127,7 @@
       const [senha, setSenha] = useState("");
       const [submitting, setSubmitting] = useState(false);
       const [error, setError] = useState("");
+      const [baixando, setBaixando] = useState(false);
 
       const load = async () => {
         const d = await sb("extraction_requests?select=id,status,status_detail,pdf_links,credentials,created_at&order=created_at.desc&limit=50");
@@ -92,14 +155,13 @@
             }),
           });
           if (res && res[0]) {
-            setSel(res[0].id);
-            setCpf(""); setSenha("");
-            setView("list");
-            load();
+            setSel(res[0].id); setCpf(""); setSenha(""); setView("list"); load();
           } else { setError("Erro ao criar tarefa."); }
         } catch(e) { setError("Erro de conexão."); }
         setSubmitting(false);
       };
+
+      const logout = () => { sessionStorage.removeItem("saas_auth"); window.location.reload(); };
 
       return (
         <div style={{ minHeight: "100vh", background: "#f5f6fa" }}>
@@ -116,6 +178,7 @@
               <span style={{ fontSize: 12, color: "#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs</span>
               <button onClick={() => setView("form")} style={{ background: "#22c55e", border: "none", color: "#fff", padding: "9px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Novo Cliente</button>
               <button onClick={load} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻</button>
+              <button onClick={logout} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#94a3b8", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>Sair</button>
             </div>
           </div>
 
@@ -161,12 +224,11 @@
 
             {/* Main */}
             <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
-              {/* Formulário novo cliente */}
               {view === "form" && (
                 <div style={{ maxWidth: 440, margin: "40px auto" }}>
                   <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
                     <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>Novo Cliente</h2>
-                    <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Digite as credenciais do portal Amazonas Energia</p>
+                    <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Credenciais do portal Amazonas Energia</p>
                     <div style={{ marginBottom: 16 }}>
                       <label style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6, display: "block" }}>CPF ou CNPJ</label>
                       <input type="text" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00"
@@ -190,11 +252,10 @@
                 </div>
               )}
 
-              {/* Detalhe da tarefa */}
               {view === "list" && !task && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 124px)", flexDirection: "column" }}>
                   <div style={{ width: 80, height: 80, background: "#e5e7eb", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 16 }}>📄</div>
-                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração ou adicione um novo cliente</p>
+                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração ou adicione um cliente</p>
                 </div>
               )}
 
@@ -215,10 +276,10 @@
                       <span><strong>Data:</strong> {new Date(task.created_at).toLocaleString("pt-BR")}</span>
                       {task.pdf_links && <span><strong>Faturas:</strong> {task.pdf_links.length}</span>}
                       {task.pdf_links && task.pdf_links.length > 0 && (
-                        <button onClick={() => baixarTudo(task.pdf_links)} style={{
-                          background: "#059669", color: "#fff", padding: "8px 20px", borderRadius: 8,
-                          fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", marginLeft: "auto"
-                        }}>↓ Baixar Tudo ({task.pdf_links.length})</button>
+                        <button onClick={() => baixarTudo(task.pdf_links, setBaixando)} disabled={baixando}
+                          style={{ background: "#059669", color: "#fff", padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", marginLeft: "auto", opacity: baixando ? 0.6 : 1 }}>
+                          {baixando ? "Baixando..." : `↓ Baixar Tudo (${task.pdf_links.length})`}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -237,8 +298,8 @@
                               {f.valor > 0 && <span style={{ color: "#059669", fontWeight: 600, marginLeft: 6 }}>R$ {Number(f.valor).toFixed(2)}</span>}
                             </div>
                           </div>
-                          <a href={f.storage_url} target="_blank" rel="noopener noreferrer"
-                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>↓ Baixar</a>
+                          <button onClick={() => baixarPDF(f.storage_url, f.filename)}
+                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer" }}>↓ Baixar</button>
                         </div>
                       ))}
                     </div>
@@ -246,7 +307,7 @@
                     <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
                       <div style={{ width: 36, height: 36, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
                       <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Baixando faturas...</p>
-                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Isso leva de 1 a 5 minutos dependendo do número de UCs</p>
+                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>De 1 a 5 minutos dependendo das UCs</p>
                     </div>
                   ) : task.status === "credenciais_invalidas" ? (
                     <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
@@ -261,6 +322,15 @@
           </div>
         </div>
       );
+    }
+
+    // ══════════════════════════════════════════════
+    // Root — decide se mostra login ou dashboard
+    // ══════════════════════════════════════════════
+    function App() {
+      const [authed, setAuthed] = useState(sessionStorage.getItem("saas_auth") === "ok");
+      if (!authed) return <LoginGate onAuth={() => setAuthed(true)} />;
+      return <Dashboard />;
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
