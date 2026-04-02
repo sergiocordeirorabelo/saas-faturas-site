@@ -13,6 +13,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Nunito Sans', 'Segoe UI', sans-serif; background: #f5f6fa; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    input:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    button:hover { opacity: 0.9; }
   </style>
 </head>
 <body>
@@ -21,7 +23,7 @@
     const { useState, useEffect } = React;
 
     const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
+    const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
 
     async function sb(ep, opts = {}) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
@@ -33,29 +35,36 @@
 
     const ST = {
       pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
-      aguardando_login: { label: "Aguardando", color: "#7c3aed", bg: "#ede9fe" },
       em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe" },
       concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5" },
       erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2" },
-      credenciais_invalidas: { label: "Cred. Inválidas", color: "#dc2626", bg: "#fee2e2" },
+      credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2" },
     };
 
     function baixarTudo(pdfs) {
       pdfs.forEach((f, i) => {
-        setTimeout(() => {
-          const a = document.createElement("a");
-          a.href = f.storage_url;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.click();
-        }, i * 500);
+        setTimeout(() => { const a = document.createElement("a"); a.href = f.storage_url; a.target = "_blank"; a.click(); }, i * 500);
       });
     }
 
+    function formatCpf(v) {
+      const n = v.replace(/\D/g, "").slice(0, 14);
+      if (n.length <= 3) return n;
+      if (n.length <= 6) return n.slice(0,3) + "." + n.slice(3);
+      if (n.length <= 9) return n.slice(0,3) + "." + n.slice(3,6) + "." + n.slice(6);
+      if (n.length <= 11) return n.slice(0,3) + "." + n.slice(3,6) + "." + n.slice(6,9) + "-" + n.slice(9);
+      return n.slice(0,2) + "." + n.slice(2,5) + "." + n.slice(5,8) + "/" + n.slice(8,12) + "-" + n.slice(12);
+    }
+
     function App() {
+      const [view, setView] = useState("list"); // "list" | "form"
       const [tasks, setTasks] = useState([]);
       const [sel, setSel] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [cpf, setCpf] = useState("");
+      const [senha, setSenha] = useState("");
+      const [submitting, setSubmitting] = useState(false);
+      const [error, setError] = useState("");
 
       const load = async () => {
         const d = await sb("extraction_requests?select=id,status,status_detail,pdf_links,credentials,created_at&order=created_at.desc&limit=50");
@@ -69,20 +78,44 @@
       const concluidas = tasks.filter(t => t.status === "concluido").length;
       const totalPdfs = tasks.reduce((a, t) => a + (t.pdf_links?.length || 0), 0);
 
+      const handleSubmit = async () => {
+        const cpfLimpo = cpf.replace(/\D/g, "");
+        if (!cpfLimpo || !senha) { setError("Preencha CPF e senha."); return; }
+        setSubmitting(true); setError("");
+        try {
+          const res = await sb("extraction_requests", {
+            method: "POST",
+            body: JSON.stringify({
+              concessionaria: "amazonas_energia",
+              credentials: { cpf_cnpj: cpfLimpo, senha: senha },
+              status: "pendente",
+            }),
+          });
+          if (res && res[0]) {
+            setSel(res[0].id);
+            setCpf(""); setSenha("");
+            setView("list");
+            load();
+          } else { setError("Erro ao criar tarefa."); }
+        } catch(e) { setError("Erro de conexão."); }
+        setSubmitting(false);
+      };
+
       return (
         <div style={{ minHeight: "100vh", background: "#f5f6fa" }}>
           {/* Header */}
           <div style={{ background: "linear-gradient(135deg, #0d2137 0%, #153657 100%)", padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, background: "#22c55e", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#fff" }}>⚡</div>
+              <div style={{ width: 36, height: 36, background: "#22c55e", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#fff" }}>⚡</div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#ffffff" }}>SaaS Faturas</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>SaaS Faturas</div>
                 <div style={{ fontSize: 11, color: "#7db8e0" }}>Amazonas Energia</div>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ fontSize: 12, color: "#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs</div>
-              <button onClick={load} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>↻ Atualizar</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 12, color: "#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs</span>
+              <button onClick={() => setView("form")} style={{ background: "#22c55e", border: "none", color: "#fff", padding: "9px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>+ Novo Cliente</button>
+              <button onClick={load} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻</button>
             </div>
           </div>
 
@@ -92,23 +125,21 @@
               <div style={{ padding: "18px 20px 10px", fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                 Extrações ({tasks.length})
               </div>
-
               {loading && <p style={{ padding: 40, textAlign: "center", color: "#d1d5db" }}>Carregando...</p>}
-
               {tasks.map(t => {
                 const s = ST[t.status] || ST.pendente;
-                const cpf = t.credentials?.cpf_cnpj || t.credentials?.id_cliente || "—";
+                const cpfD = t.credentials?.cpf_cnpj || t.credentials?.id_cliente || "—";
                 const n = t.pdf_links?.length || 0;
                 const ucs = t.credentials?.ucs?.length || 0;
                 const dt = new Date(t.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
                 const active = sel === t.id;
                 return (
-                  <div key={t.id} onClick={() => setSel(t.id)} style={{
+                  <div key={t.id} onClick={() => { setSel(t.id); setView("list"); }} style={{
                     padding: "14px 20px", margin: "2px 8px", borderRadius: 10, cursor: "pointer",
                     background: active ? "#f0f7ff" : "#fff", border: active ? "1.5px solid #3b82f6" : "1.5px solid transparent",
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{cpf}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{cpfD}</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: s.color, background: s.bg, padding: "3px 10px", borderRadius: 20 }}>{s.label}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "#9ca3af", display: "flex", gap: 10 }}>
@@ -119,26 +150,56 @@
                   </div>
                 );
               })}
-
               {!loading && tasks.length === 0 && (
                 <div style={{ padding: 48, textAlign: "center" }}>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>📋</div>
-                  <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Nenhuma extração ainda</p>
-                  <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>Faça login no portal com a extensão</p>
+                  <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Nenhuma extração</p>
+                  <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Cliente"</p>
                 </div>
               )}
             </div>
 
             {/* Main */}
-            <div style={{ flex: 1, overflowY: "auto", padding: task ? 28 : 0 }}>
-              {!task ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column" }}>
-                  <div style={{ width: 80, height: 80, background: "#e5e7eb", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 16 }}>📄</div>
-                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração para ver as faturas</p>
+            <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+              {/* Formulário novo cliente */}
+              {view === "form" && (
+                <div style={{ maxWidth: 440, margin: "40px auto" }}>
+                  <div style={{ background: "#fff", borderRadius: 16, padding: 32, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
+                    <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>Novo Cliente</h2>
+                    <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 24 }}>Digite as credenciais do portal Amazonas Energia</p>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6, display: "block" }}>CPF ou CNPJ</label>
+                      <input type="text" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00"
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #d1d5db", fontSize: 16, background: "#f9fafb" }} />
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <label style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 6, display: "block" }}>Senha</label>
+                      <input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha do portal"
+                        onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #d1d5db", fontSize: 16, background: "#f9fafb" }} />
+                    </div>
+                    {error && <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#dc2626", fontSize: 13 }}>{error}</div>}
+                    <button onClick={handleSubmit} disabled={submitting}
+                      style={{ width: "100%", padding: 14, borderRadius: 10, border: "none", background: "#0d2137", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
+                      {submitting ? "Enviando..." : "⚡ Buscar Faturas"}
+                    </button>
+                    <button onClick={() => setView("list")} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid #d1d5db", background: "transparent", color: "#6b7280", fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+                      Cancelar
+                    </button>
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Detalhe da tarefa */}
+              {view === "list" && !task && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 124px)", flexDirection: "column" }}>
+                  <div style={{ width: 80, height: 80, background: "#e5e7eb", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 16 }}>📄</div>
+                  <p style={{ color: "#9ca3af", fontSize: 15 }}>Selecione uma extração ou adicione um novo cliente</p>
+                </div>
+              )}
+
+              {view === "list" && task && (
                 <div>
-                  {/* Info card */}
                   <div style={{ background: "#fff", borderRadius: 14, padding: 24, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #e5e7eb" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
@@ -156,16 +217,12 @@
                       {task.pdf_links && task.pdf_links.length > 0 && (
                         <button onClick={() => baixarTudo(task.pdf_links)} style={{
                           background: "#059669", color: "#fff", padding: "8px 20px", borderRadius: 8,
-                          fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
-                          marginLeft: "auto", display: "flex", alignItems: "center", gap: 6
-                        }}>
-                          ↓ Baixar Tudo ({task.pdf_links.length})
-                        </button>
+                          fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", marginLeft: "auto"
+                        }}>↓ Baixar Tudo ({task.pdf_links.length})</button>
                       )}
                     </div>
                   </div>
 
-                  {/* Grid de faturas */}
                   {task.pdf_links && task.pdf_links.length > 0 ? (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
                       {task.pdf_links.map((f, i) => (
@@ -181,9 +238,7 @@
                             </div>
                           </div>
                           <a href={f.storage_url} target="_blank" rel="noopener noreferrer"
-                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-                            ↓ Baixar
-                          </a>
+                            style={{ background: "#0d2137", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>↓ Baixar</a>
                         </div>
                       ))}
                     </div>
@@ -191,7 +246,13 @@
                     <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
                       <div style={{ width: 36, height: 36, border: "4px solid #e5e7eb", borderTop: "4px solid #3b82f6", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
                       <p style={{ color: "#6b7280", fontSize: 14, fontWeight: 600 }}>Baixando faturas...</p>
-                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Isso leva cerca de 2 minutos</p>
+                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Isso leva de 1 a 5 minutos dependendo do número de UCs</p>
+                    </div>
+                  ) : task.status === "credenciais_invalidas" ? (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 48, textAlign: "center", border: "1px solid #e5e7eb" }}>
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+                      <p style={{ color: "#dc2626", fontSize: 15, fontWeight: 700 }}>CPF ou senha inválidos</p>
+                      <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Verifique os dados e tente novamente</p>
                     </div>
                   ) : null}
                 </div>
