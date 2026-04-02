@@ -19,6 +19,8 @@
     .toggle.on { background: #22c55e; }
     .toggle-dot { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: left .2s; }
     .toggle.on .toggle-dot { left: 22px; }
+    .del-btn { opacity: 0; transition: opacity .15s; }
+    .task-row:hover .del-btn { opacity: 1; }
   </style>
 </head>
 <body>
@@ -38,12 +40,19 @@
       return r.json();
     }
 
+    async function sbDelete(ep) {
+      await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
+      });
+    }
+
     const ST = {
-      pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7", icon: "⏳" },
-      em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe", icon: "⬇️" },
-      concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5", icon: "✅" },
-      erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2", icon: "❌" },
-      credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2", icon: "🔒" },
+      pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
+      em_progresso: { label: "Baixando...", color: "#2563eb", bg: "#dbeafe" },
+      concluido: { label: "Concluído", color: "#059669", bg: "#d1fae5" },
+      erro_extracao: { label: "Erro", color: "#dc2626", bg: "#fee2e2" },
+      credenciais_invalidas: { label: "CPF/Senha inválidos", color: "#dc2626", bg: "#fee2e2" },
     };
 
     async function baixarPDF(url, filename) {
@@ -78,7 +87,6 @@
       return n.slice(0,2)+"."+n.slice(2,5)+"."+n.slice(5,8)+"/"+n.slice(8,12)+"-"+n.slice(12);
     }
 
-    // ══════ Login Gate ══════
     function LoginGate({ onAuth }) {
       const [code, setCode] = useState("");
       const [error, setError] = useState("");
@@ -98,7 +106,6 @@
       );
     }
 
-    // ══════ Dashboard ══════
     function Dashboard() {
       const [view, setView] = useState("list");
       const [tasks, setTasks] = useState([]);
@@ -127,7 +134,6 @@
       const totalPdfs = tasks.reduce((a, t) => a + (t.pdf_links?.length || 0), 0);
       const monitorados = tasks.filter(t => t.credentials?.monitorar).length;
 
-      // UCs disponíveis na tarefa selecionada
       const ucsDisponiveis = task?.pdf_links ? [...new Set(task.pdf_links.map(f => f.uc))] : [];
       const faturasFiltradas = task?.pdf_links ? (filtroUC === "todas" ? task.pdf_links : task.pdf_links.filter(f => String(f.uc) === filtroUC)) : [];
 
@@ -136,19 +142,33 @@
         if (!cpfLimpo || !senha) { setError("Preencha CPF e senha."); return; }
         setSubmitting(true); setError("");
         try {
-          const creds = { cpf_cnpj: cpfLimpo, senha: senha, meses: parseInt(meses), monitorar: monitorar };
-          if (ucsInput.trim()) {
-            creds.selected_ucs = ucsInput.split(",").map(u => u.trim()).filter(u => u);
-          }
+          const creds = { cpf_cnpj: cpfLimpo, senha, meses: parseInt(meses), monitorar };
+          if (ucsInput.trim()) creds.selected_ucs = ucsInput.split(",").map(u => u.trim()).filter(u => u);
           const res = await sb("extraction_requests", {
             method: "POST",
             body: JSON.stringify({ concessionaria: "amazonas_energia", credentials: creds, status: "pendente" }),
           });
-          if (res && res[0]) {
-            setSel(res[0].id); setCpf(""); setSenha(""); setUcsInput(""); setMonitorar(false); setMeses("12"); setView("list"); load();
-          } else { setError("Erro ao criar tarefa."); }
+          if (res && res[0]) { setSel(res[0].id); setCpf(""); setSenha(""); setUcsInput(""); setMonitorar(false); setMeses("12"); setView("list"); load(); }
+          else setError("Erro ao criar tarefa.");
         } catch(e) { setError("Erro de conexão."); }
         setSubmitting(false);
+      };
+
+      const excluirTask = async (id, e) => {
+        e.stopPropagation();
+        if (!confirm("Excluir esta extração?")) return;
+        await sbDelete(`extraction_requests?id=eq.${id}`);
+        if (sel === id) setSel(null);
+        load();
+      };
+
+      const excluirTudo = async () => {
+        if (!confirm(`Excluir TODAS as ${tasks.length} extrações? Essa ação não pode ser desfeita.`)) return;
+        for (const t of tasks) {
+          await sbDelete(`extraction_requests?id=eq.${t.id}`);
+        }
+        setSel(null);
+        load();
       };
 
       const limpar = () => { setSel(null); setFiltroUC("todas"); };
@@ -166,7 +186,7 @@
               </div>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-              <span style={{ fontSize:12, color:"#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs {monitorados > 0 && `• ${monitorados} monitorado(s)`}</span>
+              <span style={{ fontSize:12, color:"#7db8e0" }}>{concluidas} concluída(s) • {totalPdfs} PDFs {monitorados > 0 && `• ${monitorados} 🔔`}</span>
               <button onClick={()=>setView("form")} style={{ background:"#22c55e", border:"none", color:"#fff", padding:"9px 20px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>+ Novo Cliente</button>
               <button onClick={load} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.2)", color:"#fff", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13 }}>↻</button>
               <button onClick={logout} style={{ background:"rgba(255,255,255,.08)", border:"1px solid rgba(255,255,255,.15)", color:"#94a3b8", padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Sair</button>
@@ -176,8 +196,13 @@
           <div style={{ display:"flex", minHeight:"calc(100vh - 68px)" }}>
             {/* Sidebar */}
             <div style={{ width:360, background:"#fff", borderRight:"1px solid #e5e7eb", overflowY:"auto" }}>
-              <div style={{ padding:"18px 20px 10px", fontSize:12, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:".5px" }}>
-                Extrações ({tasks.length})
+              <div style={{ padding:"18px 20px 10px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:12, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:".5px" }}>Extrações ({tasks.length})</span>
+                {tasks.length > 0 && (
+                  <button onClick={excluirTudo} style={{ fontSize:11, color:"#dc2626", background:"#fee2e2", border:"1px solid #fecaca", padding:"3px 10px", borderRadius:6, cursor:"pointer", fontWeight:600 }}>
+                    Limpar tudo
+                  </button>
+                )}
               </div>
               {loading && <p style={{ padding:40, textAlign:"center", color:"#d1d5db" }}>Carregando...</p>}
               {tasks.map(t => {
@@ -189,15 +214,19 @@
                 const dt = new Date(t.created_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
                 const active = sel === t.id;
                 return (
-                  <div key={t.id} onClick={()=>{setSel(t.id);setView("list");setFiltroUC("todas");}} style={{
-                    padding:"14px 20px", margin:"2px 8px", borderRadius:10, cursor:"pointer",
+                  <div key={t.id} className="task-row" onClick={()=>{setSel(t.id);setView("list");setFiltroUC("todas");}} style={{
+                    padding:"14px 20px", margin:"2px 8px", borderRadius:10, cursor:"pointer", position:"relative",
                     background: active?"#f0f7ff":"#fff", border: active?"1.5px solid #3b82f6":"1.5px solid transparent",
                   }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                       <span style={{ fontSize:14, fontWeight:700, color:"#1e293b" }}>
                         {cpfD} {mon && <span title="Monitorando" style={{ fontSize:12 }}>🔔</span>}
                       </span>
-                      <span style={{ fontSize:11, fontWeight:700, color:s.color, background:s.bg, padding:"3px 10px", borderRadius:20 }}>{s.label}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:s.color, background:s.bg, padding:"3px 10px", borderRadius:20 }}>{s.label}</span>
+                        <button className="del-btn" onClick={(e)=>excluirTask(t.id,e)}
+                          style={{ width:22, height:22, borderRadius:6, border:"1px solid #fecaca", background:"#fee2e2", color:"#dc2626", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, lineHeight:1, padding:0 }}>✕</button>
+                      </div>
                     </div>
                     <div style={{ fontSize:12, color:"#9ca3af", display:"flex", gap:10 }}>
                       <span>{dt}</span>
@@ -219,21 +248,18 @@
             {/* Main */}
             <div style={{ flex:1, overflowY:"auto", padding:28 }}>
 
-              {/* ══════ Formulário ══════ */}
               {view === "form" && (
                 <div style={{ maxWidth:480, margin:"30px auto" }}>
                   <div style={{ background:"#fff", borderRadius:16, padding:32, boxShadow:"0 2px 8px rgba(0,0,0,.06)", border:"1px solid #e5e7eb" }}>
                     <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Novo Cliente</h2>
                     <p style={{ fontSize:13, color:"#9ca3af", marginBottom:24 }}>Credenciais do portal Amazonas Energia</p>
 
-                    {/* CPF */}
                     <div style={{ marginBottom:16 }}>
                       <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>CPF ou CNPJ *</label>
                       <input type="text" value={cpf} onChange={e=>setCpf(formatCpf(e.target.value))} placeholder="000.000.000-00"
                         style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:16, background:"#f9fafb" }} />
                     </div>
 
-                    {/* Senha */}
                     <div style={{ marginBottom:16 }}>
                       <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>Senha *</label>
                       <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="Senha do portal"
@@ -241,7 +267,6 @@
                         style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:16, background:"#f9fafb" }} />
                     </div>
 
-                    {/* Meses */}
                     <div style={{ marginBottom:16 }}>
                       <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>Período de faturas</label>
                       <select value={meses} onChange={e=>setMeses(e.target.value)}
@@ -254,21 +279,19 @@
                       </select>
                     </div>
 
-                    {/* UCs específicas */}
                     <div style={{ marginBottom:16 }}>
                       <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>
                         UCs específicas <span style={{ fontWeight:400, color:"#9ca3af" }}>(opcional — vazio = todas)</span>
                       </label>
                       <input type="text" value={ucsInput} onChange={e=>setUcsInput(e.target.value)} placeholder="Ex: 21300, 6021263"
                         style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:15, background:"#f9fafb" }} />
-                      <p style={{ fontSize:11, color:"#9ca3af", marginTop:4 }}>Separe por vírgula. Deixe vazio para baixar de todas as UCs.</p>
+                      <p style={{ fontSize:11, color:"#9ca3af", marginTop:4 }}>Separe por vírgula. Vazio = todas as UCs.</p>
                     </div>
 
-                    {/* Monitorar */}
                     <div style={{ marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:"#f0fdf4", borderRadius:10, border:"1px solid #bbf7d0" }}>
                       <div>
                         <div style={{ fontSize:14, fontWeight:700, color:"#166534" }}>🔔 Monitorar faturas novas</div>
-                        <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>Busca automaticamente quando surgir fatura nova</div>
+                        <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>Busca automática quando surgir fatura nova</div>
                       </div>
                       <div className={`toggle ${monitorar?"on":""}`} onClick={()=>setMonitorar(!monitorar)}>
                         <div className="toggle-dot"></div>
@@ -289,7 +312,6 @@
                 </div>
               )}
 
-              {/* ══════ Vazio ══════ */}
               {view === "list" && !task && (
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 124px)", flexDirection:"column" }}>
                   <div style={{ width:80, height:80, background:"#e5e7eb", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, marginBottom:16 }}>📄</div>
@@ -297,10 +319,8 @@
                 </div>
               )}
 
-              {/* ══════ Detalhe ══════ */}
               {view === "list" && task && (
                 <div>
-                  {/* Info card */}
                   <div style={{ background:"#fff", borderRadius:14, padding:24, marginBottom:20, boxShadow:"0 1px 3px rgba(0,0,0,.06)", border:"1px solid #e5e7eb" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                       <div>
@@ -310,13 +330,11 @@
                           {task.credentials?.monitorar && <span style={{ marginLeft:8, fontSize:14 }} title="Monitorando">🔔</span>}
                         </div>
                       </div>
-                      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <div style={{ display:"flex", gap:8 }}>
                         <span style={{ fontSize:13, fontWeight:700, color:(ST[task.status]||ST.pendente).color, background:(ST[task.status]||ST.pendente).bg, padding:"6px 16px", borderRadius:20 }}>
                           {(ST[task.status]||ST.pendente).label}
                         </span>
-                        <button onClick={limpar} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>
-                          ✕ Limpar
-                        </button>
+                        <button onClick={limpar} style={{ background:"#f1f5f9", border:"1px solid #e2e8f0", color:"#64748b", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }}>✕ Limpar</button>
                       </div>
                     </div>
                     <div style={{ display:"flex", gap:16, marginTop:14, fontSize:13, color:"#6b7280", alignItems:"center", flexWrap:"wrap" }}>
@@ -325,8 +343,6 @@
                       {task.pdf_links && <span><strong>Faturas:</strong> {task.pdf_links.length}</span>}
                       {task.credentials?.meses && <span><strong>Período:</strong> {task.credentials.meses} meses</span>}
                     </div>
-
-                    {/* Filtro por UC + Baixar Tudo */}
                     {task.pdf_links && task.pdf_links.length > 0 && (
                       <div style={{ display:"flex", gap:10, marginTop:16, alignItems:"center", flexWrap:"wrap" }}>
                         <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>Filtrar UC:</label>
@@ -343,7 +359,6 @@
                     )}
                   </div>
 
-                  {/* Grid faturas */}
                   {task.pdf_links && task.pdf_links.length > 0 ? (
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10 }}>
                       {faturasFiltradas.map((f, i) => (
@@ -367,7 +382,7 @@
                     <div style={{ background:"#fff", borderRadius:14, padding:48, textAlign:"center", border:"1px solid #e5e7eb" }}>
                       <div style={{ width:36, height:36, border:"4px solid #e5e7eb", borderTop:"4px solid #3b82f6", borderRadius:"50%", margin:"0 auto 16px", animation:"spin 1s linear infinite" }} />
                       <p style={{ color:"#6b7280", fontSize:14, fontWeight:600 }}>Baixando faturas...</p>
-                      <p style={{ color:"#9ca3af", fontSize:13, marginTop:4 }}>De 1 a 5 minutos dependendo das UCs e do período</p>
+                      <p style={{ color:"#9ca3af", fontSize:13, marginTop:4 }}>De 1 a 5 minutos dependendo das UCs</p>
                     </div>
                   ) : task.status==="credenciais_invalidas" ? (
                     <div style={{ background:"#fff", borderRadius:14, padding:48, textAlign:"center", border:"1px solid #e5e7eb" }}>
