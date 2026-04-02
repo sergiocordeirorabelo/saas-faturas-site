@@ -23,7 +23,7 @@
     const { useState, useEffect } = React;
 
     const SUPABASE_URL = "https://shaihalexolocjjkkpoh.supabase.co";
-    const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoYWloYWxleG9sb2NqamtrcG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2ODUsImV4cCI6MjA5MDU3NjY4NX0.TfMwnhlu-TDZY2n_hxIhpUdXQEOdbr14SuH2e8R9cH8";
 
     async function sb(ep, opts = {}) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/${ep}`, {
