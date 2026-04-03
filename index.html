@@ -113,7 +113,7 @@
       const [loading, setLoading] = useState(true);
       const [cpf, setCpf] = useState("");
       const [senha, setSenha] = useState("");
-      const [meses, setMeses] = useState("12");
+      const [meses, setMeses] = useState("1");
       const [ucsInput, setUcsInput] = useState("");
       const [monitorar, setMonitorar] = useState(false);
       const [submitting, setSubmitting] = useState(false);
@@ -271,6 +271,9 @@
                       <label style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6, display:"block" }}>Período de faturas</label>
                       <select value={meses} onChange={e=>setMeses(e.target.value)}
                         style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:"1.5px solid #d1d5db", fontSize:15, background:"#f9fafb", cursor:"pointer", color:"#1e293b" }}>
+                        <option value="1">Último mês</option>
+                        <option value="3">Últimos 3 meses</option>
+                        <option value="6">Últimos 6 meses</option>
                         <option value="12">Últimos 12 meses</option>
                         <option value="24">Últimos 24 meses (2 anos)</option>
                         <option value="36">Últimos 36 meses (3 anos)</option>
